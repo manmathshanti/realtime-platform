@@ -1,0 +1,155 @@
+import csv
+import io
+import logging
+from django.utils import timezone
+from django.core.cache import cache
+from django.conf import settings
+
+from common.service.base_service import BaseService
+from common.exceptions import RateLimitException, ValidationException, NotFoundException
+
+from apps.accounts.models import Organization
+from .models import DataSource, Event, IngestionJob, IngestionJobStatusChoices
+from .repositories import DataSourceRepository, EventRepository, IngestionJobRepository
+
+logger = logging.getLogger(__name__)
+
+RATE_LIMIT_PREFIX = 'rate_limit:ingestion'
+
+
+class RateLimiter:
+    """Simple Redis-backed sliding window rate limiter."""
+
+    @staticmethod
+    def check_and_increment(key: str, limit: int, window_seconds: int = 60) -> bool:
+        """Returns True if within limit, False if exceeded."""
+        cache_key = f'{RATE_LIMIT_PREFIX}:{key}'
+        current = cache.get(cache_key, 0)
+        if current >= limit:
+            return False
+        pipe_val = cache.get_or_set(cache_key, 0, window_seconds)
+        cache.incr(cache_key)
+        return True
+
+
+class IngestionService(BaseService):
+    def __init__(self):
+        self.event_repo = EventRepository()
+        self.source_repo = DataSourceRepository()
+        self.job_repo = IngestionJobRepository()
+
+    def _check_rate_limit(self, org: Organization):
+        limit = getattr(settings, 'RATE_LIMIT_PER_ORG', 1000)
+        if not RateLimiter.check_and_increment(f'org:{org.id}', limit):
+            raise RateLimitException(f'Rate limit exceeded. Max {limit} requests/minute per organization.')
+
+    def ingest_single_event(self, org: Organization, event_data: dict, source_id: int = None) -> Event:
+        self._check_rate_limit(org)
+        source = None
+        if source_id:
+            source = self.source_repo.get_first(
+                filters=[('id', source_id), ('organization', org)], error=False
+            )
+
+        event = self.event_repo.create({
+            'organization': org,
+            'source': source,
+            'event_name': event_data['event_name'],
+            'properties': event_data.get('properties', {}),
+            'timestamp': event_data.get('timestamp') or timezone.now(),
+        })
+
+        # Broadcast to WebSocket group
+        self._broadcast_event(org.id, event)
+        return event
+
+    def ingest_batch_events(self, org: Organization, events_data: list[dict], source_id: int = None) -> dict:
+        self._check_rate_limit(org)
+        source = None
+        if source_id:
+            source = self.source_repo.get_first(
+                filters=[('id', source_id), ('organization', org)], error=False
+            )
+
+        records = []
+        for evt in events_data:
+            records.append({
+                'organization': org,
+                'source': source,
+                'event_name': evt['event_name'],
+                'properties': evt.get('properties', {}),
+                'timestamp': evt.get('timestamp') or timezone.now(),
+            })
+
+        count = self.event_repo.bulk_create_events(records)
+        return {'ingested': count, 'total': len(events_data)}
+
+    def ingest_csv(self, org: Organization, file_obj, source_id: int = None) -> IngestionJob:
+        source = None
+        if source_id:
+            source = self.source_repo.get_first(
+                filters=[('id', source_id), ('organization', org)], error=False
+            )
+
+        job = self.job_repo.create({
+            'organization': org,
+            'source': source,
+            'file_name': getattr(file_obj, 'name', 'upload.csv'),
+            'status': IngestionJobStatusChoices.PENDING,
+        })
+
+        # Read file content before it's closed
+        file_content = file_obj.read().decode('utf-8')
+
+        from apps.ingestion.tasks import process_csv_ingestion
+        process_csv_ingestion.delay(job.id, file_content)
+        return job
+
+    def get_events(self, org: Organization, filters: dict):
+        return self.event_repo.get_org_events(org.id, filters)
+
+    def get_event_names(self, org: Organization) -> list[str]:
+        return self.event_repo.get_event_names_for_org(org.id)
+
+    def get_timeseries(self, org: Organization, event_name: str, from_ts, to_ts, interval: str):
+        return list(self.event_repo.aggregate_timeseries(org.id, event_name, from_ts, to_ts, interval))
+
+    def get_job(self, org: Organization, job_uuid: str) -> IngestionJob:
+        job = self.job_repo.get_by_uuid_and_org(job_uuid, org.id)
+        if not job:
+            raise NotFoundException('Ingestion job not found.')
+        return job
+
+    def list_jobs(self, org: Organization):
+        return self.job_repo.get_org_jobs(org.id)
+
+    def create_data_source(self, org: Organization, data: dict) -> DataSource:
+        return self.source_repo.create({
+            'organization': org,
+            'name': data['name'],
+            'source_type': data['source_type'],
+            'description': data.get('description', ''),
+        })
+
+    def list_data_sources(self, org: Organization):
+        return self.source_repo.get_org_sources(org.id)
+
+    def _broadcast_event(self, org_id: int, event: Event):
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'events_{org_id}',
+                {
+                    'type': 'event.new',
+                    'event': {
+                        'id': event.id,
+                        'event_name': event.event_name,
+                        'properties': event.properties,
+                        'timestamp': event.timestamp.isoformat(),
+                    },
+                }
+            )
+        except Exception:
+            pass  # Don't fail ingestion because of WS broadcast error
