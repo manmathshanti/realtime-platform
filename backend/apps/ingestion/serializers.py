@@ -9,6 +9,7 @@ class EventPayloadSerializer(serializers.Serializer):
     event_name = serializers.CharField(max_length=255)
     properties = serializers.DictField(required=False, default=dict)
     timestamp = serializers.DateTimeField(required=False)
+    source_id = serializers.IntegerField(required=False, allow_null=True)
 
     def validate_timestamp(self, value):
         if value and value > timezone.now():
@@ -16,7 +17,7 @@ class EventPayloadSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        if 'timestamp' not in attrs or not attrs.get('timestamp'):
+        if not attrs.get('timestamp'):
             attrs['timestamp'] = timezone.now()
         return attrs
 
@@ -38,10 +39,15 @@ class CreateDataSourceSerializer(serializers.Serializer):
 
 
 class DataSourceSerializer(serializers.ModelSerializer):
+    has_webhook_secret = serializers.SerializerMethodField()
+
     class Meta:
         model = DataSource
-        fields = ['id', 'uuid', 'name', 'source_type', 'description', 'is_active', 'created_at']
+        fields = ['id', 'uuid', 'name', 'source_type', 'description', 'is_active', 'has_webhook_secret', 'created_at']
         read_only_fields = fields
+
+    def get_has_webhook_secret(self, obj) -> bool:
+        return bool(obj.webhook_secret)
 
 
 class EventSerializer(serializers.ModelSerializer):

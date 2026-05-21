@@ -1,12 +1,15 @@
 from django.urls import path
 from .views import (
-    DashboardListCreateView, DashboardDetailView, DashboardShareView, PublicDashboardView,
+    DashboardListCreateView, DashboardOverviewView, DashboardTemplateListView,
+    DashboardDetailView, DashboardShareView, PublicDashboardView,
     WidgetListCreateView, WidgetDetailView, WidgetDataView,
     SavedQueryListCreateView, SavedQueryDetailView,
 )
 
 urlpatterns = [
     path('', DashboardListCreateView.as_view(), name='dashboard-list'),
+    path('overview/', DashboardOverviewView.as_view(), name='dashboard-overview'),
+    path('templates/', DashboardTemplateListView.as_view(), name='dashboard-template-list'),
     path('<str:dashboard_uuid>/', DashboardDetailView.as_view(), name='dashboard-detail'),
     path('<str:dashboard_uuid>/share/', DashboardShareView.as_view(), name='dashboard-share'),
 

@@ -21,6 +21,8 @@ from .repositories import (
     InviteRepository, RefreshTokenRepository, APIKeyRepository
 )
 
+_REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60
+
 
 class AuthService(BaseService):
     def __init__(self):
@@ -112,6 +114,8 @@ class OrganizationService(BaseService):
         self.membership_repo = MembershipRepository()
         self.invite_repo = InviteRepository()
         self.user_repo = UserRepository()
+        self.refresh_repo = RefreshTokenRepository()
+        self.jwt = JWTService()
 
     def get_org(self, org) -> Organization:
         return org
@@ -213,12 +217,19 @@ class OrganizationService(BaseService):
         invite.accepted_at = timezone.now()
         invite.save(update_fields=['status', 'accepted_at'])
 
-        from common.auth.jwt_service import JWTService
-        jwt = JWTService()
+        exp_days = getattr(settings, 'JWT_REFRESH_EXP_DAYS', 30)
+        access_token = self.jwt.create_access_token(str(user.uuid))
+        raw_refresh = self.jwt.create_refresh_token(str(user.uuid))
+        self.refresh_repo.create({
+            'user': user,
+            'token': raw_refresh,
+            'expires_at': timezone.now() + timedelta(days=exp_days),
+        })
         return {
             'user': user,
             'organization': invite.organization,
-            'access_token': jwt.create_access_token(str(user.uuid)),
+            'access_token': access_token,
+            'refresh_token': raw_refresh,
         }
 
 

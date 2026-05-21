@@ -116,7 +116,7 @@ class AcceptInvitePublicView(BaseAPIView):
     @validate_request(AcceptInviteSerializer)
     def post(self, request, data):
         result = OrganizationService().accept_invite(data['token'], data)
-        return self.success(
+        response = self.success(
             {
                 'user': UserSerializer(result['user']).data,
                 'organization': OrganizationSerializer(result['organization']).data,
@@ -124,6 +124,15 @@ class AcceptInvitePublicView(BaseAPIView):
             },
             code=sc.CREATED,
         )
+        response.set_cookie(
+            key='refresh_token',
+            value=result['refresh_token'],
+            httponly=True,
+            secure=not settings.DEBUG,
+            samesite='Lax',
+            max_age=30 * 24 * 60 * 60,
+        )
+        return response
 
 
 # ── Org Views ─────────────────────────────────────────────────────────────────

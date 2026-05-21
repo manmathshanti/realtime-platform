@@ -1,10 +1,4 @@
- 
-from dataclasses import dataclass
-
-
-
-@dataclass
-class StatusCodes(object):
+class StatusCodes:
     def __init__(self):
         self.SUCCESS = 200
         self.CREATED = 201
@@ -17,7 +11,3 @@ class StatusCodes(object):
         self.ISE = 500
         self.BAD_GATEWAY = 502
         self.SERVICE_UNAVAILABLE = 503
-
-
-obj_status_codes = StatusCodes()
-StatusCodesDictionary = obj_status_codes.__dict__

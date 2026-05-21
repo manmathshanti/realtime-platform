@@ -1,70 +1,44 @@
-import typing as _
+import typing as t
+from functools import wraps
+
 from rest_framework import serializers
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from common.helper.constants import StatusCodes
 
-"""
-This class is used for validating the request
-Fields:
-Methods:
-    validate_request: This method is used for validating the request
-WorkFlow:
-    First we get the query params
-    Then we get the request body
-    Then we merge the query params and request body
-    Then we create a serializer from the merged data
-    Then we check if the serializer is valid or not
-    If the serializer is not valid then we raise an exception
-    Then we return the response
-"""
 
-
-def validate_request(serializer: _.Type[serializers.Serializer]) -> _.Callable:
+def validate_request(serializer_class: t.Type[serializers.Serializer]) -> t.Callable:
     """
-    Validation helper for views:
-        * Throws validation error with proper format
-        * Provides an extra parameter to view method with sanitized data
-        * Merge query params and request body
+    Validates the incoming request body + query params using the given serializer.
+    Injects the validated data as an extra positional argument after `request`.
+    URL kwargs are merged into the validation data so path params can be validated,
+    and are also forwarded to the view method as keyword arguments.
     """
 
-    def decorator(func: _.Callable):
+    def decorator(func: t.Callable) -> t.Callable:
+        @wraps(func)
         def wrapper(self, req: Request, *args, **kwargs):
-            query_params = {}
-            # Ignoring extra query params with the same key name
-            for key in req.query_params:
-                query_params[key] = req.query_params[key]
+            query_params = {key: req.query_params[key] for key in req.query_params}
+            merged = {**req.data, **query_params, **kwargs}
+            serialized = serializer_class(data=merged)
 
-            # Creating serializer from query params and request body
-            _all = {**req.data, **query_params, **kwargs}
-            serialized = serializer(data=_all)
-
-            # Validating data
             if not serialized.is_valid():
-                # Building error messages
-                errors = []
-                for error in serialized.errors:
-                    field = error
-                    message = str(serialized.errors[error][0])
-                    errors.append(
-                        {
-                            "field": field,
-                            "message": message,
-                        }
-                    )
-
+                errors = [
+                    {'field': field, 'message': str(messages[0])}
+                    for field, messages in serialized.errors.items()
+                ]
                 return Response(
                     {
-                        "code": StatusCodes().UNPROCESSABLE_ENTITY,
-                        "message": "Validation Failed",
-                        "errors": errors,
+                        'success': False,
+                        'code': StatusCodes().UNPROCESSABLE_ENTITY,
+                        'message': 'Validation Failed',
+                        'errors': errors,
                     },
                     status=StatusCodes().UNPROCESSABLE_ENTITY,
                 )
 
-            # Calling view method
-            return func(self, req, serialized.data, *args)
+            return func(self, req, serialized.data, *args, **kwargs)
 
         return wrapper
 

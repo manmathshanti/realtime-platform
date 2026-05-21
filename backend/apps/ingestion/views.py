@@ -34,8 +34,7 @@ class IngestSingleEventView(BaseAPIView):
     @validate_request(EventPayloadSerializer)
     def post(self, request, data):
         org = _get_org_from_api_key(request)
-        source_id = request.data.get('source_id')
-        event = IngestionService().ingest_single_event(org, data, source_id)
+        event = IngestionService().ingest_single_event(org, data, data.get('source_id'))
         return self.success(
             EventSerializer(event).data,
             code=sc.CREATED,
@@ -49,6 +48,20 @@ class IngestBatchEventsView(BaseAPIView):
         org = _get_org_from_api_key(request)
         result = IngestionService().ingest_batch_events(org, data['events'], data.get('source_id'))
         return self.success(result, code=sc.CREATED, msg=f'{result["ingested"]} events ingested.')
+
+
+class IngestWebhookEventsView(BaseAPIView):
+    def post(self, request, source_uuid):
+        secret = request.headers.get('X-Webhook-Secret')
+        source = IngestionService().authenticate_webhook_source(source_uuid, secret)
+        payload = request.data or {}
+
+        if isinstance(payload, dict) and isinstance(payload.get('events'), list):
+            result = IngestionService().ingest_batch_events(source.organization, payload['events'], source.id)
+            return self.success(result, code=sc.CREATED, msg='Webhook batch ingested.')
+
+        event = IngestionService().ingest_single_event(source.organization, payload, source.id)
+        return self.success(EventSerializer(event).data, code=sc.CREATED, msg='Webhook event ingested.')
 
 
 class IngestCSVView(BaseAPIView):
@@ -82,7 +95,10 @@ class DataSourceListCreateView(BaseAPIView):
     @validate_request(CreateDataSourceSerializer)
     def post(self, request, data):
         source = IngestionService().create_data_source(request.org, data)
-        return self.success(DataSourceSerializer(source).data, code=sc.CREATED)
+        response_data = dict(DataSourceSerializer(source).data)
+        if source.webhook_secret:
+            response_data['webhook_secret'] = source.webhook_secret
+        return self.success(response_data, code=sc.CREATED)
 
 
 # ── Ingestion Jobs (JWT auth) ─────────────────────────────────────────────────

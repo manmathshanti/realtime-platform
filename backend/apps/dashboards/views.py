@@ -29,6 +29,18 @@ class DashboardListCreateView(BaseAPIView):
         return self.success(DashboardSerializer(dashboard).data, code=sc.CREATED)
 
 
+class DashboardOverviewView(BaseAPIView):
+    @auth_guard()
+    def get(self, request):
+        return self.success(DashboardService().get_overview(request.org))
+
+
+class DashboardTemplateListView(BaseAPIView):
+    @auth_guard()
+    def get(self, request):
+        return self.success(DashboardService().get_templates())
+
+
 class DashboardDetailView(BaseAPIView):
     @auth_guard()
     def get(self, request, dashboard_uuid):

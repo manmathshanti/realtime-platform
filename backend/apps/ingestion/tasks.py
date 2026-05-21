@@ -1,7 +1,6 @@
 import csv
 import io
 import logging
-from datetime import datetime
 from celery import shared_task
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -14,11 +13,8 @@ REQUIRED_CSV_COLUMNS = {'event_name'}
 @shared_task(bind=True, max_retries=2, default_retry_delay=30)
 def process_csv_ingestion(self, job_id: int, file_content: str):
     from .models import IngestionJob, IngestionJobStatusChoices, Event
-    from .repositories import IngestionJobRepository
 
-    job_repo = IngestionJobRepository()
     job = IngestionJob.objects.select_related('organization').get(pk=job_id)
-
     job.status = IngestionJobStatusChoices.PROCESSING
     job.started_at = timezone.now()
     job.save(update_fields=['status', 'started_at'])
@@ -44,7 +40,7 @@ def process_csv_ingestion(self, job_id: int, file_content: str):
                     raise ValueError('event_name is empty')
 
                 ts_raw = row.get('timestamp')
-                timestamp = parse_datetime(ts_raw) if ts_raw else timezone.now()
+                timestamp = parse_datetime(ts_raw) if ts_raw else None
                 if not timestamp:
                     timestamp = timezone.now()
 
@@ -73,12 +69,14 @@ def process_csv_ingestion(self, job_id: int, file_content: str):
             job.processed_records += len(events)
 
         job.failed_records = len(errors)
-        job.error_log = errors[:100]  # cap stored errors
+        job.error_log = errors[:100]
         job.status = (
             IngestionJobStatusChoices.PARTIAL if errors else IngestionJobStatusChoices.COMPLETED
         )
         job.completed_at = timezone.now()
         job.save(update_fields=['processed_records', 'failed_records', 'error_log', 'status', 'completed_at'])
+
+        _broadcast_dashboard_refresh(job.organization_id)
         logger.info('CSV job %s done: %s processed, %s failed', job_id, job.processed_records, job.failed_records)
 
     except Exception as exc:
@@ -88,3 +86,16 @@ def process_csv_ingestion(self, job_id: int, file_content: str):
         job.save(update_fields=['status', 'error_log', 'completed_at'])
         logger.exception('CSV job %s failed', job_id)
         raise self.retry(exc=exc)
+
+
+def _broadcast_dashboard_refresh(org_id: int):
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'events_{org_id}',
+            {'type': 'dashboard.refresh'},
+        )
+    except Exception:
+        pass

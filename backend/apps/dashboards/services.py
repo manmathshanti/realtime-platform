@@ -67,6 +67,82 @@ class DashboardService(BaseService):
         dashboard = self.get_dashboard(org, dashboard_uuid)
         dashboard.revoke_share_token()
 
+    def get_overview(self, org: Organization) -> dict:
+        from django.db.models import Count
+        from apps.ingestion.models import Event
+        from apps.alerts.models import AlertRule, AlertHistory, AlertStatusChoices
+
+        now = timezone.now()
+        day_ago = now - timedelta(hours=24)
+
+        total_events = Event.objects.filter(organization=org).count()
+        events_last_24h = Event.objects.filter(organization=org, timestamp__gte=day_ago).count()
+        dashboards_count = Dashboard.objects.filter(organization=org, deleted_at__isnull=True).count()
+        active_alerts = AlertRule.objects.filter(
+            organization=org,
+            deleted_at__isnull=True,
+            status__in=[AlertStatusChoices.ACTIVE, AlertStatusChoices.TRIGGERED],
+        ).count()
+        top_events = list(
+            Event.objects.filter(organization=org, timestamp__gte=day_ago)
+            .values('event_name')
+            .annotate(count=Count('id'))
+            .order_by('-count', 'event_name')[:5]
+        )
+        recent_alerts = list(
+            AlertHistory.objects.filter(organization=org)
+            .select_related('alert_rule')
+            .order_by('-created_at')[:5]
+            .values('uuid', 'triggered_value', 'message', 'created_at', 'alert_rule__name')
+        )
+
+        return {
+            'organization': {
+                'uuid': str(org.uuid),
+                'name': org.name,
+                'slug': org.slug,
+            },
+            'kpis': {
+                'total_events': total_events,
+                'events_last_24h': events_last_24h,
+                'dashboards': dashboards_count,
+                'active_alerts': active_alerts,
+            },
+            'top_events': top_events,
+            'recent_alerts': [
+                {
+                    'uuid': str(item['uuid']),
+                    'rule_name': item['alert_rule__name'],
+                    'triggered_value': item['triggered_value'],
+                    'message': item['message'],
+                    'created_at': item['created_at'].isoformat(),
+                }
+                for item in recent_alerts
+            ],
+        }
+
+    def get_templates(self) -> list[dict]:
+        return [
+            {
+                'id': 'web-analytics',
+                'name': 'Web Analytics',
+                'description': 'Traffic, page views, top events, and acquisition trends.',
+                'widgets': ['line_chart', 'bar_chart', 'kpi_card', 'table'],
+            },
+            {
+                'id': 'sales-pipeline',
+                'name': 'Sales Pipeline',
+                'description': 'Track conversion events, revenue checkpoints, and campaign wins.',
+                'widgets': ['kpi_card', 'bar_chart', 'pie_chart', 'table'],
+            },
+            {
+                'id': 'devops-health',
+                'name': 'DevOps Health',
+                'description': 'Monitor deploy events, error spikes, and incident response signals.',
+                'widgets': ['line_chart', 'kpi_card', 'table', 'pie_chart'],
+            },
+        ]
+
 
 class WidgetService(BaseService):
     def __init__(self):

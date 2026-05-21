@@ -179,3 +179,7 @@ ticket.pdf
 
 **/migrations/*
 !**/migrations/__init__.py
+
+frontend/node_modules/
+frontend/.next/
+frontend/out/

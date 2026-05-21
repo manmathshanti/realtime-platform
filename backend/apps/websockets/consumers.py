@@ -9,13 +9,6 @@ logger = logging.getLogger(__name__)
 class BaseAuthConsumer(AsyncWebsocketConsumer):
     """Base consumer that enforces JWT authentication."""
 
-    @database_sync_to_async
-    def get_membership(self, user, org_id: int):
-        from apps.accounts.models import OrganizationMembership
-        return OrganizationMembership.objects.filter(
-            user=user, organization_id=org_id, is_active=True
-        ).select_related('organization').first()
-
     async def websocket_connect(self, message):
         user = self.scope.get('user')
         if not user or not user.is_authenticated:
@@ -28,6 +21,20 @@ class BaseAuthConsumer(AsyncWebsocketConsumer):
 
     async def send_error(self, message: str, code: int = 4000):
         await self.send_json({'type': 'error', 'message': message, 'code': code})
+
+    @database_sync_to_async
+    def get_primary_membership(self, user):
+        from apps.accounts.models import OrganizationMembership
+        return OrganizationMembership.objects.select_related('organization').filter(
+            user=user, is_active=True, organization__is_active=True
+        ).first()
+
+    @database_sync_to_async
+    def get_membership(self, user, org_id: int):
+        from apps.accounts.models import OrganizationMembership
+        return OrganizationMembership.objects.filter(
+            user=user, organization_id=org_id, is_active=True
+        ).select_related('organization').first()
 
 
 class DashboardConsumer(BaseAuthConsumer):
@@ -65,20 +72,15 @@ class DashboardConsumer(BaseAuthConsumer):
     async def receive(self, text_data=None, bytes_data=None):
         try:
             data = json.loads(text_data or '{}')
-            msg_type = data.get('type')
-            if msg_type == 'ping':
+            if data.get('type') == 'ping':
                 await self.send_json({'type': 'pong'})
         except json.JSONDecodeError:
             await self.send_error('Invalid JSON')
 
-    # ── Channel layer message handlers ─────────────────────────────────────
-
     async def event_new(self, event):
-        """Triggered by ingestion service when a new event arrives."""
         await self.send_json({'type': 'event.new', 'event': event['event']})
 
     async def dashboard_refresh(self, event):
-        """Tells client to re-fetch widget data."""
         await self.send_json({'type': 'dashboard.refresh'})
 
     @database_sync_to_async
@@ -106,7 +108,6 @@ class AlertConsumer(BaseAuthConsumer):
     """
     Real-time alert notifications.
     Connect: ws://.../ws/alerts/
-    Receives alert.triggered and alert.notification messages.
     """
 
     async def connect(self):
@@ -144,19 +145,11 @@ class AlertConsumer(BaseAuthConsumer):
     async def alert_notification(self, event):
         await self.send_json({'type': 'alert.notification', 'data': event['data']})
 
-    @database_sync_to_async
-    def get_primary_membership(self, user):
-        from apps.accounts.models import OrganizationMembership
-        return OrganizationMembership.objects.select_related('organization').filter(
-            user=user, is_active=True, organization__is_active=True
-        ).first()
-
 
 class EventStreamConsumer(BaseAuthConsumer):
     """
     Live event stream viewer (tail).
     Connect: ws://.../ws/events/stream/
-    Streams new events as they are ingested.
     """
 
     async def connect(self):
@@ -191,9 +184,5 @@ class EventStreamConsumer(BaseAuthConsumer):
     async def event_new(self, event):
         await self.send_json({'type': 'event.new', 'event': event['event']})
 
-    @database_sync_to_async
-    def get_primary_membership(self, user):
-        from apps.accounts.models import OrganizationMembership
-        return OrganizationMembership.objects.select_related('organization').filter(
-            user=user, is_active=True, organization__is_active=True
-        ).first()
+    async def dashboard_refresh(self, event):
+        await self.send_json({'type': 'dashboard.refresh'})

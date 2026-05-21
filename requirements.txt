@@ -4,7 +4,6 @@ django-cors-headers==4.4.0
 channels==4.1.0
 channels-redis==4.2.0
 daphne==4.1.2
-gunicorn==22.0.0
 celery==5.4.0
 redis==5.0.8
 python-jose[cryptography]==3.3.0
@@ -14,3 +13,8 @@ python-decouple==3.8
 Pillow==10.4.0
 django-filter==24.3
 structlog==24.4.0
+requests>=2.32,<3
+pydantic>=2.7,<3
+whitenoise==6.8.2
+dj-database-url==2.3.0
+python-dotenv==1.0.1
