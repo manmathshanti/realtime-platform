@@ -3,13 +3,13 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load .env for local development (no-op in production where env vars are set directly)
-try:
-    from dotenv import load_dotenv
-    load_dotenv(BASE_DIR / '.env')
-    load_dotenv(BASE_DIR.parent / '.env', override=False)
-except ImportError:
-    pass
+if not os.environ.get('RENDER'):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(BASE_DIR / '.env')
+        load_dotenv(BASE_DIR.parent / '.env', override=False)
+    except ImportError:
+        pass
 
 
 def env(key, default=None):
