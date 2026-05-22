@@ -113,20 +113,43 @@ export default function LoginPage() {
         </div>
 
         {hasGoogle && (
-          <div className="mb-5 flex justify-center">
-            <GoogleLogin
-              onSuccess={(res) => {
-                if (res.credential) handleGoogleSuccess(res.credential);
-              }}
-              onError={() => {
-                setErrorMsg("Google sign-in failed. Please try again.");
-                setState("error");
-              }}
-              text="signin_with"
-              shape="pill"
-              theme="outline"
-              size="large"
-            />
+          <div className="mb-5 rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-4">
+            <div className="mb-3 flex items-center justify-center gap-2 text-sm font-medium text-slate-700">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5">
+                <path
+                  fill="#EA4335"
+                  d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.9-5.5 3.9-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.5 14.6 2.5 12 2.5 6.8 2.5 2.5 6.8 2.5 12S6.8 21.5 12 21.5c6.9 0 9.1-4.8 9.1-7.3 0-.5-.1-.9-.1-1.2H12Z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M2.5 7.6 5.7 10c.9-2.7 3.4-4.6 6.3-4.6 1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.5 14.6 2.5 12 2.5 8.3 2.5 5.1 4.6 3.5 7.6Z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M12 21.5c2.5 0 4.6-.8 6.2-2.3l-3-2.4c-.8.6-1.9 1.1-3.2 1.1-3.9 0-5.2-2.5-5.5-3.8l-3.2 2.5c1.6 3.1 4.8 4.9 8.7 4.9Z"
+                />
+                <path
+                  fill="#4285F4"
+                  d="M3.5 16.4 6.7 14c-.2-.5-.3-1.2-.3-2s.1-1.4.3-2L3.5 7.6C2.8 8.9 2.5 10.4 2.5 12s.3 3.1 1 4.4Z"
+                />
+              </svg>
+              <span>Continue with Google</span>
+            </div>
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={(res) => {
+                  if (res.credential) handleGoogleSuccess(res.credential);
+                }}
+                onError={() => {
+                  setErrorMsg("Google sign-in failed. Please try again.");
+                  setState("error");
+                }}
+                text="signin_with"
+                shape="pill"
+                theme="outline"
+                size="large"
+              />
+            </div>
           </div>
         )}
 
