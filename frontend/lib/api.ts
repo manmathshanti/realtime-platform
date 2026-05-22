@@ -13,6 +13,14 @@ const ACCESS_TOKEN = process.env.NEXT_PUBLIC_ACCESS_TOKEN ?? "";
 const ORG_SLUG = process.env.NEXT_PUBLIC_ORG_SLUG ?? "";
 const USE_MOCK_DATA = (process.env.NEXT_PUBLIC_USE_MOCK_DATA ?? "true") === "true";
 
+function normalizeAccessToken(token: string) {
+  const trimmed = token.trim();
+  return trimmed.split(".").length === 3 ? trimmed : "";
+}
+
+const NORMALIZED_ACCESS_TOKEN = normalizeAccessToken(ACCESS_TOKEN);
+const NORMALIZED_ORG_SLUG = ORG_SLUG.trim().toLowerCase();
+
 type ApiEnvelope<T> = {
   success: boolean;
   data: T;
@@ -24,8 +32,8 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(ACCESS_TOKEN ? { Authorization: `Bearer ${ACCESS_TOKEN}` } : {}),
-      ...(ORG_SLUG ? { "X-Org-Slug": ORG_SLUG } : {}),
+      ...(NORMALIZED_ACCESS_TOKEN ? { Authorization: `Bearer ${NORMALIZED_ACCESS_TOKEN}` } : {}),
+      ...(NORMALIZED_ORG_SLUG ? { "X-Org-Slug": NORMALIZED_ORG_SLUG } : {}),
       ...(init?.headers ?? {})
     },
     cache: "no-store"
@@ -43,8 +51,8 @@ async function rawFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
-      ...(ACCESS_TOKEN ? { Authorization: `Bearer ${ACCESS_TOKEN}` } : {}),
-      ...(ORG_SLUG ? { "X-Org-Slug": ORG_SLUG } : {}),
+      ...(NORMALIZED_ACCESS_TOKEN ? { Authorization: `Bearer ${NORMALIZED_ACCESS_TOKEN}` } : {}),
+      ...(NORMALIZED_ORG_SLUG ? { "X-Org-Slug": NORMALIZED_ORG_SLUG } : {}),
       ...(init?.headers ?? {})
     },
     cache: "no-store"
@@ -58,7 +66,7 @@ async function rawFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function isMockMode() {
-  return USE_MOCK_DATA || !ACCESS_TOKEN;
+  return USE_MOCK_DATA || !NORMALIZED_ACCESS_TOKEN;
 }
 
 export async function getOverview(): Promise<OverviewPayload> {
@@ -107,5 +115,5 @@ export function getSocketBaseUrl() {
 }
 
 export function getAccessToken() {
-  return ACCESS_TOKEN;
+  return NORMALIZED_ACCESS_TOKEN;
 }
