@@ -6,20 +6,32 @@ import {
   mockTemplates,
   mockTimeseries
 } from "@/lib/mock-data";
+import { clearStoredAuth, getStoredOrgSlug, getStoredToken, setStoredAuth } from "@/lib/auth";
 import type { AlertHistory, AlertRule, Dashboard, DashboardTemplate, OverviewPayload, TimeSeriesPoint } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-const ACCESS_TOKEN = process.env.NEXT_PUBLIC_ACCESS_TOKEN ?? "";
-const ORG_SLUG = process.env.NEXT_PUBLIC_ORG_SLUG ?? "";
 const USE_MOCK_DATA = (process.env.NEXT_PUBLIC_USE_MOCK_DATA ?? "true") === "true";
 
-function normalizeAccessToken(token: string) {
+function normalizeToken(token: string): string {
   const trimmed = token.trim();
   return trimmed.split(".").length === 3 ? trimmed : "";
 }
 
-const NORMALIZED_ACCESS_TOKEN = normalizeAccessToken(ACCESS_TOKEN);
-const NORMALIZED_ORG_SLUG = ORG_SLUG.trim().toLowerCase();
+function getActiveToken(): string {
+  const envToken = process.env.NEXT_PUBLIC_ACCESS_TOKEN ?? "";
+  if (normalizeToken(envToken)) return normalizeToken(envToken);
+  return normalizeToken(getStoredToken());
+}
+
+function getActiveOrgSlug(): string {
+  const envSlug = (process.env.NEXT_PUBLIC_ORG_SLUG ?? "").trim().toLowerCase();
+  if (envSlug) return envSlug;
+  return getStoredOrgSlug().trim().toLowerCase();
+}
+
+export function isMockMode(): boolean {
+  return USE_MOCK_DATA || !getActiveToken();
+}
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -27,17 +39,58 @@ type ApiEnvelope<T> = {
   message?: string;
 };
 
+async function tryRefresh(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh/`, {
+      method: "POST",
+      credentials: "include"
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as ApiEnvelope<{ access_token: string }>;
+    const newToken = body.data?.access_token ?? "";
+    if (normalizeToken(newToken)) {
+      setStoredAuth(newToken);
+      return newToken;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const token = getActiveToken();
+  const orgSlug = getActiveOrgSlug();
+
+  const makeHeaders = (t: string) => ({
+    "Content-Type": "application/json",
+    ...(t ? { Authorization: `Bearer ${t}` } : {}),
+    ...(orgSlug ? { "X-Org-Slug": orgSlug } : {}),
+    ...(init?.headers ?? {})
+  });
+
+  let response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(NORMALIZED_ACCESS_TOKEN ? { Authorization: `Bearer ${NORMALIZED_ACCESS_TOKEN}` } : {}),
-      ...(NORMALIZED_ORG_SLUG ? { "X-Org-Slug": NORMALIZED_ORG_SLUG } : {}),
-      ...(init?.headers ?? {})
-    },
+    headers: makeHeaders(token),
+    credentials: "include",
     cache: "no-store"
   });
+
+  if (response.status === 401) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        ...init,
+        headers: makeHeaders(refreshed),
+        credentials: "include",
+        cache: "no-store"
+      });
+    } else {
+      clearStoredAuth();
+      if (typeof window !== "undefined") window.location.href = "/login";
+      throw new Error("Session expired");
+    }
+  }
 
   if (!response.ok) {
     throw new Error(`Request failed for ${path} with status ${response.status}`);
@@ -48,25 +101,43 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function rawFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const token = getActiveToken();
+  const orgSlug = getActiveOrgSlug();
+
+  const makeHeaders = (t: string) => ({
+    ...(t ? { Authorization: `Bearer ${t}` } : {}),
+    ...(orgSlug ? { "X-Org-Slug": orgSlug } : {}),
+    ...(init?.headers ?? {})
+  });
+
+  let response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: {
-      ...(NORMALIZED_ACCESS_TOKEN ? { Authorization: `Bearer ${NORMALIZED_ACCESS_TOKEN}` } : {}),
-      ...(NORMALIZED_ORG_SLUG ? { "X-Org-Slug": NORMALIZED_ORG_SLUG } : {}),
-      ...(init?.headers ?? {})
-    },
+    headers: makeHeaders(token),
+    credentials: "include",
     cache: "no-store"
   });
+
+  if (response.status === 401) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        ...init,
+        headers: makeHeaders(refreshed),
+        credentials: "include",
+        cache: "no-store"
+      });
+    } else {
+      clearStoredAuth();
+      if (typeof window !== "undefined") window.location.href = "/login";
+      throw new Error("Session expired");
+    }
+  }
 
   if (!response.ok) {
     throw new Error(`Request failed for ${path} with status ${response.status}`);
   }
 
   return response.json() as Promise<T>;
-}
-
-export function isMockMode() {
-  return USE_MOCK_DATA || !NORMALIZED_ACCESS_TOKEN;
 }
 
 export async function getOverview(): Promise<OverviewPayload> {
@@ -108,12 +179,16 @@ export async function getPublicDashboard(token: string): Promise<(Dashboard & { 
   }
 }
 
-export function getSocketBaseUrl() {
+export function getSocketBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_WS_BASE_URL;
   if (explicit) return explicit;
   return API_BASE_URL.replace("http://", "ws://").replace("https://", "wss://");
 }
 
-export function getAccessToken() {
-  return NORMALIZED_ACCESS_TOKEN;
+export function getAccessToken(): string {
+  return getActiveToken();
+}
+
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
 }
