@@ -71,8 +71,9 @@ class AuthService(BaseService):
         if not user.is_active:
             raise UnauthorizedException('Account is disabled.')
 
+        organization = self._get_primary_organization(user)
         tokens = self._issue_tokens(user)
-        return {'user': user, **tokens}
+        return {'user': user, 'organization': organization, **tokens}
 
     def refresh(self, token: str) -> dict:
         stored = self.refresh_repo.get_valid_token(token)
@@ -136,8 +137,9 @@ class AuthService(BaseService):
         if not user.is_active:
             raise UnauthorizedException('Account is disabled.')
 
+        organization = self._get_primary_organization(user)
         tokens = self._issue_tokens(user)
-        return {'user': user, **tokens}
+        return {'user': user, 'organization': organization, **tokens}
 
     def _issue_tokens(self, user: User) -> dict:
         access_token = self.jwt.create_access_token(str(user.uuid))
@@ -149,6 +151,13 @@ class AuthService(BaseService):
             'expires_at': timezone.now() + timedelta(days=exp_days),
         })
         return {'access_token': access_token, 'refresh_token': raw_refresh}
+
+    def _get_primary_organization(self, user: User):
+        membership = self.membership_repo.get_first(
+            filters=[('user', user), ('is_active', True), ('organization__is_active', True)],
+            error=False,
+        )
+        return membership.organization if membership else None
 
 
 class OrganizationService(BaseService):

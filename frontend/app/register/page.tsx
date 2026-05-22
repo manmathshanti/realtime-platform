@@ -30,7 +30,7 @@ export default function RegisterPage() {
       if (!res.ok) { setErrorMsg(body?.message ?? "Google sign-in failed."); setState("error"); return; }
       const token: string = body?.data?.access_token ?? "";
       if (!token) { setErrorMsg("Invalid response from server."); setState("error"); return; }
-      setStoredAuth(token);
+      setStoredAuth(token, body?.data?.organization?.slug);
       router.push("/");
       router.refresh();
     } catch {

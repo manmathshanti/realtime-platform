@@ -44,6 +44,7 @@ class LoginView(BaseAPIView):
         response = self.success(
             {
                 'user': UserSerializer(result['user']).data,
+                'organization': OrganizationSerializer(result['organization']).data if result.get('organization') else None,
                 'access_token': result['access_token'],
             },
             msg='Login successful.',
@@ -144,6 +145,7 @@ class GoogleAuthView(BaseAPIView):
         response = self.success(
             {
                 'user': UserSerializer(result['user']).data,
+                'organization': OrganizationSerializer(result['organization']).data if result.get('organization') else None,
                 'access_token': result['access_token'],
             },
             msg='Google login successful.',

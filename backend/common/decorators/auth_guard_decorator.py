@@ -65,6 +65,11 @@ def auth_guard(require_auth: bool = True):
             request.jwt_user = user
             request.user = user
 
+            def _get_default_membership():
+                return OrganizationMembership.objects.select_related('organization').filter(
+                    user=user, is_active=True, organization__is_active=True
+                ).first()
+
             # Attach org membership when org_slug is in URL
             org_slug = kwargs.get('org_slug') or request.headers.get('X-Org-Slug')
             if org_slug:
@@ -74,13 +79,13 @@ def auth_guard(require_auth: bool = True):
                     is_active=True,
                     organization__is_active=True,
                 ).first()
+                if not membership:
+                    membership = _get_default_membership()
                 request.membership = membership
                 request.org = membership.organization if membership else None
             else:
                 # Fall back to first active membership
-                membership = OrganizationMembership.objects.select_related('organization').filter(
-                    user=user, is_active=True, organization__is_active=True
-                ).first()
+                membership = _get_default_membership()
                 request.membership = membership
                 request.org = membership.organization if membership else None
 

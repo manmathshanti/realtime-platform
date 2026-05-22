@@ -13,7 +13,11 @@ export function getStoredOrgSlug(): string {
 
 export function setStoredAuth(token: string, orgSlug?: string) {
   localStorage.setItem(TOKEN_KEY, token);
-  if (orgSlug) localStorage.setItem(ORG_SLUG_KEY, orgSlug);
+  if (orgSlug) {
+    localStorage.setItem(ORG_SLUG_KEY, orgSlug);
+  } else {
+    localStorage.removeItem(ORG_SLUG_KEY);
+  }
 }
 
 export function clearStoredAuth() {

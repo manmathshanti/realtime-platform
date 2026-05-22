@@ -45,7 +45,7 @@ export default function LoginPage() {
         return;
       }
 
-      setStoredAuth(token);
+      setStoredAuth(token, body?.data?.organization?.slug);
       router.push("/");
       router.refresh();
     } catch {
@@ -81,7 +81,7 @@ export default function LoginPage() {
         return;
       }
 
-      setStoredAuth(token);
+      setStoredAuth(token, body?.data?.organization?.slug);
       router.push("/");
       router.refresh();
     } catch {
