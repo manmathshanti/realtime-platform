@@ -1,6 +1,14 @@
 # Real-Time Analytics & Reporting Platform
 
-A production-ready analytics SaaS built for a Senior Full Stack Engineer assessment. Think a lightweight Mixpanel or Metabase — organizations can ingest events from multiple sources, build custom dashboards, set threshold alerts, and get live WebSocket updates as data flows in.
+A production-ready analytics SaaS built for a Senior Full Stack Engineer assessment. Think a lightweight Mixpanel or Metabase - organizations can ingest events from multiple sources, build custom dashboards, set threshold alerts, and get live WebSocket updates as data flows in.
+
+# Test Credentials
+
+You can test the live application using the following demo credentials:
+
+**Email**: test@example.com
+**Password**: Test@1234
+
 
 **Live demo:** https://realtime-platform-indol.vercel.app  
 **Backend:** https://realtime-platform.onrender.com
@@ -10,7 +18,7 @@ A production-ready analytics SaaS built for a Senior Full Stack Engineer assessm
 ## What's Built
 
 **Auth & Multi-Tenancy**
-JWT access tokens with refresh token rotation (HTTP-only cookie), invite-based team onboarding, and a four-level role hierarchy (Owner → Admin → Analyst → Viewer). Every query is scoped to the organization at the DB layer — no data leaks between tenants.
+JWT access tokens with refresh token rotation (HTTP-only cookie), invite-based team onboarding, and a four-level role hierarchy (Owner → Admin → Analyst → Viewer). Every query is scoped to the organization at the DB layer - no data leaks between tenants.
 
 **Event Ingestion**
 Single events, batch events, CSV uploads, and webhook receivers. All payloads go through Pydantic validation before hitting the DB. API keys are per-org and can be rotated or revoked independently.
@@ -22,7 +30,7 @@ Create dashboards, attach widgets, configure time ranges, and share via a public
 Define threshold rules (e.g. "error_rate > 5% for 10 minutes"), evaluated by Celery Beat on a schedule. Notifications go out via in-app, email, or webhook. Rules can be muted and the full trigger history is queryable.
 
 **Real-Time**
-WebSocket connections for live dashboard refresh, alert push notifications, and a live event stream tail — all authenticated via JWT query param.
+WebSocket connections for live dashboard refresh, alert push notifications, and a live event stream tail - all authenticated via JWT query param.
 
 ---
 
@@ -56,7 +64,7 @@ realtime_platform/
 
 ## Architecture
 
-The backend follows a clean layered pattern — nothing in the views does business logic, nothing in the services touches HTTP:
+The backend follows a clean layered pattern - nothing in the views does business logic, nothing in the services touches HTTP:
 
 ```
 URLs → Views → Services → Repositories → Models
@@ -102,7 +110,7 @@ pip install -r requirements.txt
 docker compose up -d redis postgres
 ```
 
-SQLite works fine for local dev — if you want to skip Postgres, set `DB_ENGINE=sqlite` and only start Redis.
+SQLite works fine for local dev - if you want to skip Postgres, set `DB_ENGINE=sqlite` and only start Redis.
 
 ### 3. Configure the backend
 
@@ -114,7 +122,7 @@ cp .env.example .env
 Key vars to check:
 
 ```
-DB_ENGINE=sqlite          # or postgres
+DB_ENGINE=postgres          # or sqlite
 REDIS_URL=redis://127.0.0.1:6379/0
 FRONTEND_URL=http://localhost:3000
 ```
@@ -129,16 +137,16 @@ python manage.py createsuperuser
 
 ### 5. Start backend services
 
-The project uses WebSockets, so it must run as ASGI via Daphne — not gunicorn.
+The project uses WebSockets, so it must run as ASGI via Daphne - not gunicorn.
 
 ```bash
-# Terminal 1 — ASGI server
+# Terminal 1 - ASGI server
 daphne -b 0.0.0.0 -p 8000 realtime_platform.asgi:application
 
-# Terminal 2 — Celery worker
+# Terminal 2 - Celery worker
 celery -A realtime_platform worker --loglevel=info
 
-# Terminal 3 — Celery beat (alert evaluation, scheduled tasks)
+# Terminal 3 - Celery beat (alert evaluation, scheduled tasks)
 celery -A realtime_platform beat --loglevel=info
 ```
 
@@ -189,7 +197,7 @@ Everything below was manually tested against the live deployment. Base URL: `htt
 
 ---
 
-### Module 1 — Auth & Multi-Tenancy
+### Module 1 - Auth & Multi-Tenancy
 
 #### Register
 
@@ -197,7 +205,7 @@ Everything below was manually tested against the live deployment. Base URL: `htt
 curl -X POST https://realtime-platform.onrender.com/api/v1/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "test@example.com",
+    "email": "demo@example.com",
     "password": "Test1234",
     "first_name": "Test",
     "last_name": "User",
@@ -212,7 +220,7 @@ curl -X POST https://realtime-platform.onrender.com/api/v1/auth/register/ \
   "data": {
     "user": {
       "uuid": "c31707ec-1ef1-4927-8afb-1a5f716dc8a1",
-      "email": "test@example.com",
+      "email": "demo@example.com",
       "first_name": "Test",
       "last_name": "User",
       "full_name": "Test User",
@@ -242,7 +250,7 @@ curl -X POST https://realtime-platform.onrender.com/api/v1/auth/register/ \
 curl -X POST https://realtime-platform.onrender.com/api/v1/auth/login/ \
   -H "Content-Type: application/json" \
   -c cookies.txt \
-  -d '{"email": "test@example.com", "password": "Test1234"}'
+  -d '{"email": "demo@example.com", "password": "Test1234"}'
 ```
 
 ```json
@@ -250,7 +258,7 @@ curl -X POST https://realtime-platform.onrender.com/api/v1/auth/login/ \
   "success": true,
   "code": 200,
   "data": {
-    "user": { "uuid": "c31707ec-...", "email": "test@example.com", "full_name": "Test User" },
+    "user": { "uuid": "c31707ec-...", "email": "demo@example.com", "full_name": "Test User" },
     "organization": { "slug": "demo-corp" },
     "access_token": "<jwt>"
   },
@@ -273,7 +281,7 @@ curl https://realtime-platform.onrender.com/api/v1/auth/me/ \
   "code": 200,
   "data": {
     "uuid": "c31707ec-1ef1-4927-8afb-1a5f716dc8a1",
-    "email": "test@example.com",
+    "email": "demo@example.com",
     "full_name": "Test User",
     "is_email_verified": false,
     "created_at": "2026-05-22T15:07:11.677460Z"
@@ -340,7 +348,7 @@ curl https://realtime-platform.onrender.com/api/v1/org/members/ \
   "data": [
     {
       "uuid": "a9c6aee0-2ca9-4f1b-a27a-b103a25ebe9a",
-      "user": { "email": "test@example.com", "full_name": "Test User" },
+      "user": { "email": "demo@example.com", "full_name": "Test User" },
       "role": "owner",
       "joined_at": "2026-05-22T15:07:13.284500Z",
       "is_active": true
@@ -385,7 +393,7 @@ curl -X POST https://realtime-platform.onrender.com/api/v1/api-keys/ \
     "expires_at": null,
     "created_at": "2026-05-22T15:13:08.911031Z"
   },
-  "message": "Store this key securely — it will not be shown again."
+  "message": "Store this key securely - it will not be shown again."
 }
 ```
 
@@ -393,7 +401,7 @@ curl -X POST https://realtime-platform.onrender.com/api/v1/api-keys/ \
 
 ---
 
-### Module 2 — Event Ingestion
+### Module 2 - Event Ingestion
 
 #### Single Event
 
@@ -559,7 +567,7 @@ curl "https://realtime-platform.onrender.com/api/v1/ingest/query/timeseries/?eve
 
 ---
 
-### Module 3 — Dashboards
+### Module 3 - Dashboards
 
 #### Create a Dashboard
 
@@ -638,7 +646,7 @@ Public URL: `https://realtime-platform-indol.vercel.app/public/<share_token>`
 
 ---
 
-### Module 4 — Alerts
+### Module 4 - Alerts
 
 #### Create an Alert Rule
 
@@ -718,7 +726,7 @@ curl -X POST https://realtime-platform.onrender.com/api/v1/alerts/rules/$RULE_UU
 
 ---
 
-### Module 5 — WebSockets
+### Module 5 - WebSockets
 
 All WebSocket connections require the JWT access token as a query param.
 
@@ -746,7 +754,7 @@ Events pushed by the server:
 
 ---
 
-### Module 6 — Frontend
+### Module 6 - Frontend
 
 Open the live app: https://realtime-platform-indol.vercel.app
 
