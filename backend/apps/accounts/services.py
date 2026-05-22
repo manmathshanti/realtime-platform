@@ -96,6 +96,49 @@ class AuthService(BaseService):
         user.save(update_fields=['password'])
         self.refresh_repo.revoke_all_for_user(user.id)
 
+    def google_auth(self, credential: str) -> dict:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+
+        client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '')
+        if not client_id:
+            raise ValidationException('Google OAuth is not configured on this server.')
+
+        try:
+            info = id_token.verify_oauth2_token(credential, google_requests.Request(), client_id)
+        except Exception:
+            raise UnauthorizedException('Invalid or expired Google credential.')
+
+        email = info.get('email', '').lower()
+        if not email:
+            raise UnauthorizedException('Could not retrieve email from Google account.')
+
+        user = self.user_repo.get_by_email(email)
+        if not user:
+            base_slug = slugify(info.get('name', email.split('@')[0]))
+            slug = base_slug
+            counter = 1
+            while self.org_repo.slug_exists(slug):
+                slug = f'{base_slug}-{counter}'
+                counter += 1
+
+            user = self.user_repo.create({
+                'email': email,
+                'first_name': info.get('given_name', ''),
+                'last_name': info.get('family_name', ''),
+            })
+            user.set_password(secrets.token_urlsafe(32))
+            user.save(update_fields=['password'])
+
+            org = self.org_repo.create({'name': info.get('name', email.split('@')[0]), 'slug': slug})
+            self.membership_repo.create({'user': user, 'organization': org, 'role': RoleChoices.OWNER})
+
+        if not user.is_active:
+            raise UnauthorizedException('Account is disabled.')
+
+        tokens = self._issue_tokens(user)
+        return {'user': user, **tokens}
+
     def _issue_tokens(self, user: User) -> dict:
         access_token = self.jwt.create_access_token(str(user.uuid))
         raw_refresh = self.jwt.create_refresh_token(str(user.uuid))

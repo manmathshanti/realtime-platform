@@ -38,7 +38,7 @@ def validate_request(serializer_class: t.Type[serializers.Serializer]) -> t.Call
                     status=StatusCodes().UNPROCESSABLE_ENTITY,
                 )
 
-            return func(self, req, serialized.data, *args, **kwargs)
+            return func(self, req, serialized.validated_data, *args, **kwargs)
 
         return wrapper
 

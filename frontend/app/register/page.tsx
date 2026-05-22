@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { GoogleLogin } from "@react-oauth/google";
 import { getApiBaseUrl } from "@/lib/api";
 import { setStoredAuth } from "@/lib/auth";
 
@@ -12,6 +13,31 @@ export default function RegisterPage() {
   const [form, setForm] = useState({ email: "", password: "", first_name: "", last_name: "", org_name: "" });
   const [state, setState] = useState<FormState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+
+  const hasGoogle = Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+
+  async function handleGoogleSuccess(credential: string) {
+    setState("loading");
+    setErrorMsg("");
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/auth/google/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ credential })
+      });
+      const body = await res.json();
+      if (!res.ok) { setErrorMsg(body?.message ?? "Google sign-in failed."); setState("error"); return; }
+      const token: string = body?.data?.access_token ?? "";
+      if (!token) { setErrorMsg("Invalid response from server."); setState("error"); return; }
+      setStoredAuth(token);
+      router.push("/");
+      router.refresh();
+    } catch {
+      setErrorMsg("Could not reach the server.");
+      setState("error");
+    }
+  }
 
   function update(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -71,6 +97,27 @@ export default function RegisterPage() {
             Set up your workspace to get started.
           </p>
         </div>
+
+        {hasGoogle && (
+          <div className="mb-5 flex justify-center">
+            <GoogleLogin
+              onSuccess={(res) => { if (res.credential) handleGoogleSuccess(res.credential); }}
+              onError={() => { setErrorMsg("Google sign-in failed. Please try again."); setState("error"); }}
+              text="signup_with"
+              shape="pill"
+              theme="outline"
+              size="large"
+            />
+          </div>
+        )}
+
+        {hasGoogle && (
+          <div className="mb-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-slate-900/8" />
+            <span className="text-xs text-slate-400">or register with email</span>
+            <div className="h-px flex-1 bg-slate-900/8" />
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">

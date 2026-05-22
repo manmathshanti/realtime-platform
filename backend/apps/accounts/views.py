@@ -135,6 +135,30 @@ class AcceptInvitePublicView(BaseAPIView):
         return response
 
 
+class GoogleAuthView(BaseAPIView):
+    def post(self, request):
+        credential = request.data.get('credential', '').strip()
+        if not credential:
+            return self.error_message('credential is required', sc.BAD_REQUEST)
+        result = AuthService().google_auth(credential)
+        response = self.success(
+            {
+                'user': UserSerializer(result['user']).data,
+                'access_token': result['access_token'],
+            },
+            msg='Google login successful.',
+        )
+        response.set_cookie(
+            key='refresh_token',
+            value=result['refresh_token'],
+            httponly=True,
+            secure=not settings.DEBUG,
+            samesite='Lax',
+            max_age=30 * 24 * 60 * 60,
+        )
+        return response
+
+
 # ── Org Views ─────────────────────────────────────────────────────────────────
 
 class OrganizationDetailView(BaseAPIView):

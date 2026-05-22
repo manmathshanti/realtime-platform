@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { getApiBaseUrl, isMockMode } from "@/lib/api";
+import { GoogleLogin } from "@react-oauth/google";
+import { getApiBaseUrl } from "@/lib/api";
 import { setStoredAuth } from "@/lib/auth";
 
 type LoginState = "idle" | "loading" | "error";
@@ -13,6 +14,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [state, setState] = useState<LoginState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+
+  const hasGoogle = Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,6 +54,42 @@ export default function LoginPage() {
     }
   }
 
+  async function handleGoogleSuccess(credential: string) {
+    setState("loading");
+    setErrorMsg("");
+
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/auth/google/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ credential })
+      });
+
+      const body = await res.json();
+
+      if (!res.ok) {
+        setErrorMsg(body?.message ?? "Google sign-in failed.");
+        setState("error");
+        return;
+      }
+
+      const token: string = body?.data?.access_token ?? "";
+      if (!token) {
+        setErrorMsg("Invalid response from server.");
+        setState("error");
+        return;
+      }
+
+      setStoredAuth(token);
+      router.push("/");
+      router.refresh();
+    } catch {
+      setErrorMsg("Could not reach the server.");
+      setState("error");
+    }
+  }
+
   function handleMockMode() {
     router.push("/");
   }
@@ -72,6 +111,32 @@ export default function LoginPage() {
             Enter your credentials to access the workspace.
           </p>
         </div>
+
+        {hasGoogle && (
+          <div className="mb-5 flex justify-center">
+            <GoogleLogin
+              onSuccess={(res) => {
+                if (res.credential) handleGoogleSuccess(res.credential);
+              }}
+              onError={() => {
+                setErrorMsg("Google sign-in failed. Please try again.");
+                setState("error");
+              }}
+              text="signin_with"
+              shape="pill"
+              theme="outline"
+              size="large"
+            />
+          </div>
+        )}
+
+        {hasGoogle && (
+          <div className="mb-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-slate-900/8" />
+            <span className="text-xs text-slate-400">or sign in with email</span>
+            <div className="h-px flex-1 bg-slate-900/8" />
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
