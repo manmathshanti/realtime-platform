@@ -215,12 +215,12 @@ export default function LoginPage() {
           <div className="h-px flex-1 bg-slate-900/8" />
         </div>
 
-        <button
+        {/* <button
           onClick={handleMockMode}
           className="mt-4 w-full rounded-xl border border-slate-900/10 bg-white/60 px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-white/80"
         >
           Continue with mock data
-        </button>
+        </button> */}
 
         <p className="mt-6 text-center text-xs text-slate-400">
           No account?{" "}
