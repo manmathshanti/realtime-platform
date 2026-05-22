@@ -1,6 +1,6 @@
 # Real-Time Analytics & Reporting Platform
 
-Production-ready analytics SaaS built for the Senior Full Stack Engineer assessment. The project includes a Django/DRF backend, Celery workers, Redis-backed realtime updates via Django Channels, and a polished Next.js frontend workspace.
+Production-ready analytics SaaS built for the Senior Full Stack Engineer assessment. The project includes a Django/DRF backend, Celery workers, Redis-backed realtime updates via Django Channels, and a polished Next.js frontend workspace
 
 ## What’s Included
 
